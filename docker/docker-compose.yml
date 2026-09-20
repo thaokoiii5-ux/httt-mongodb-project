@@ -1,5 +1,5 @@
 services:
-  mongodb:
+  mongo1:
     image: mongo:7.0
     container_name: mongo-single
     restart: unless-stopped
@@ -8,12 +8,50 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: admin123
-      MONGO_INITDB_DATABASE: techstore_db
     volumes:
       - mongo_data:/data/db
       - mongo_config:/data/configdb
-    command: ["mongod", "--bind_ip_all"]
+      - ./mongo-keyfile:/etc/mongo-keyfile:ro
+    command: ["mongod", "--bind_ip_all", "--replSet", "rs0", "--keyFile", "/etc/mongo-keyfile"]
+    networks:
+      - mongo-cluster
+
+  mongo2:
+    image: mongo:7.0
+    container_name: mongo-node2
+    restart: unless-stopped
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo_data2:/data/db
+      - mongo_config2:/data/configdb
+      - ./mongo-keyfile:/etc/mongo-keyfile:ro
+    command: ["mongod", "--bind_ip_all", "--replSet", "rs0", "--keyFile", "/etc/mongo-keyfile"]
+    networks:
+      - mongo-cluster
+
+  mongo3:
+    image: mongo:7.0
+    container_name: mongo-node3
+    restart: unless-stopped
+    ports:
+      - "27019:27017"
+    volumes:
+      - mongo_data3:/data/db
+      - mongo_config3:/data/configdb
+      - ./mongo-keyfile:/etc/mongo-keyfile:ro
+    command: ["mongod", "--bind_ip_all", "--replSet", "rs0", "--keyFile", "/etc/mongo-keyfile"]
+    networks:
+      - mongo-cluster
+
+networks:
+  mongo-cluster:
+    driver: bridge
 
 volumes:
   mongo_data:
   mongo_config:
+  mongo_data2:
+  mongo_config2:
+  mongo_data3:
+  mongo_config3:
