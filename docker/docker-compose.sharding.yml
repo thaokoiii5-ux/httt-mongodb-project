@@ -1,0 +1,70 @@
+name: shardlab
+
+services:
+  cfg:
+    image: mongo:7.0
+    container_name: mongo-cfg
+    restart: unless-stopped
+    command: ["mongod", "--configsvr", "--replSet", "cfgrs", "--port", "27017", "--bind_ip_all",
+              "--keyFile", "/etc/mongo-keyfile", "--wiredTigerCacheSizeGB", "0.25"]
+    volumes:
+      - cfg_data:/data/db
+      - cfg_config:/data/configdb
+      - ./mongo-keyfile:/etc/mongo-keyfile:ro
+    networks:
+      - shard-net
+
+  shard1:
+    image: mongo:7.0
+    container_name: mongo-shard1
+    restart: unless-stopped
+    command: ["mongod", "--shardsvr", "--replSet", "shard1rs", "--port", "27017", "--bind_ip_all",
+              "--keyFile", "/etc/mongo-keyfile", "--wiredTigerCacheSizeGB", "0.25"]
+    volumes:
+      - shard1_data:/data/db
+      - shard1_config:/data/configdb
+      - ./mongo-keyfile:/etc/mongo-keyfile:ro
+    networks:
+      - shard-net
+
+  shard2:
+    image: mongo:7.0
+    container_name: mongo-shard2
+    restart: unless-stopped
+    command: ["mongod", "--shardsvr", "--replSet", "shard2rs", "--port", "27017", "--bind_ip_all",
+              "--keyFile", "/etc/mongo-keyfile", "--wiredTigerCacheSizeGB", "0.25"]
+    volumes:
+      - shard2_data:/data/db
+      - shard2_config:/data/configdb
+      - ./mongo-keyfile:/etc/mongo-keyfile:ro
+    networks:
+      - shard-net
+
+  router:
+    image: mongo:7.0
+    container_name: mongo-router
+    restart: unless-stopped
+    ports:
+      - "27020:27017"
+    command: ["mongos", "--configdb", "cfgrs/mongo-cfg:27017", "--bind_ip_all",
+              "--keyFile", "/etc/mongo-keyfile"]
+    volumes:
+      - ./mongo-keyfile:/etc/mongo-keyfile:ro
+    depends_on:
+      - cfg
+      - shard1
+      - shard2
+    networks:
+      - shard-net
+
+networks:
+  shard-net:
+    driver: bridge
+
+volumes:
+  cfg_data:
+  cfg_config:
+  shard1_data:
+  shard1_config:
+  shard2_data:
+  shard2_config:
