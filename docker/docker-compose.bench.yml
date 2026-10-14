@@ -1,0 +1,20 @@
+name: benchlab
+
+services:
+  standalone:
+    image: mongo:7.0
+    container_name: mongo-bench
+    restart: unless-stopped
+    ports:
+      - "27021:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+    command: ["mongod", "--bind_ip_all", "--wiredTigerCacheSizeGB", "0.25"]
+    volumes:
+      - bench_data:/data/db
+      - bench_config:/data/configdb
+
+volumes:
+  bench_data:
+  bench_config:
