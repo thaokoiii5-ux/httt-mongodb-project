@@ -46,7 +46,7 @@ print("\n=> Nhận xét: COLLSCAN (quét toàn bộ collection) chuyển thành 
 print("   (tra thẳng vào index B-tree), giảm số document phải kiểm tra.");
 
 
-print("\n========== BƯỚC 2: Compound Index (orders.user_id + order_date) ==========\n");
+print("\n========== BƯỚC 2: Compound Index (orders.user_id + created_at) ==========\n");
 
 const sampleUser = db.users.findOne();
 print("User mẫu dùng để test: " + sampleUser.name + " (" + sampleUser._id + ")");
@@ -61,10 +61,10 @@ printjson({
 });
 
 print("\n--- 2.2. Tạo compound index ---");
-// Compound index { user_id: 1, order_date: -1 } phục vụ đồng thời:
+// Compound index { user_id: 1, created_at: -1 } phục vụ đồng thời:
 //   - Query lọc theo user_id
-//   - Query lọc theo user_id + sort theo order_date (nhờ nguyên tắc prefix)
-const idx2 = db.orders.createIndex({ user_id: 1, order_date: -1 });
+//   - Query lọc theo user_id + sort theo created_at (nhờ nguyên tắc prefix)
+const idx2 = db.orders.createIndex({ user_id: 1, created_at: -1 });
 print("Đã tạo index: " + idx2);
 
 print("\n--- 2.3. Sau khi có index - chỉ lọc theo user_id ---");
@@ -76,9 +76,9 @@ printjson({
   nReturned: after2a.executionStats.nReturned
 });
 
-print("\n--- 2.4. Sau khi có index - lọc theo user_id + sort order_date ---");
+print("\n--- 2.4. Sau khi có index - lọc theo user_id + sort created_at ---");
 const after2b = db.orders.find({ user_id: sampleUser._id })
-  .sort({ order_date: -1 })
+  .sort({ created_at: -1 })
   .explain("executionStats");
 printjson({
   stage: after2b.queryPlanner.winningPlan.stage,
