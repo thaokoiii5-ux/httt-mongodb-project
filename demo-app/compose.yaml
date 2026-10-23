@@ -1,0 +1,22 @@
+# Chạy API demo trong cùng mạng Docker với cụm rs0 (cụm rs0 phải đang chạy).
+# Tên node (mongo-single, mongo-node2, mongo-node3) chỉ phân giải được bên trong
+# mạng này, nên ứng dụng phải chạy trong container thay vì chạy trực tiếp trên máy.
+# Thông tin đăng nhập dưới đây chỉ dùng cho môi trường lab.
+name: demoapp
+
+services:
+  api:
+    build: .
+    container_name: demo-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      MONGO_URI: "mongodb://app_user:app123@mongo-single:27017,mongo-node2:27017,mongo-node3:27017/ecommerce_db?replicaSet=rs0&authSource=ecommerce_db"
+    networks:
+      - mongo-cluster
+
+networks:
+  mongo-cluster:
+    external: true
+    name: docker_mongo-cluster
