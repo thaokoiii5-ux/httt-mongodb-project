@@ -18,12 +18,17 @@
 // Lưu ý: --configsvr mặc định port 27019 và --shardsvr mặc định port 27018,
 // nên compose phải ép --port 27017 cho các node này.
 //
-// Sau đó chạy script này trên mongos:
+// THỨ TỰ CHẠY CÁC SCRIPT TRÊN MONGOS:
+//   1) Chạy file này trước: addShard, enableSharding và shardCollection khi orders còn TRỐNG,
+//      để MongoDB tự pre-split chunk. (Nếu orders đã có dữ liệu mà chưa shard thì phải tạo
+//      index { user_id: "hashed" } trước khi shardCollection, nếu không sẽ lỗi.)
+//   2) Chạy 05-sharding-seed.js để nạp dữ liệu (script đó cũng tự đảm bảo orders đã shard).
+//   3) Chạy lại file này để xem phân phối dữ liệu và so sánh các truy vấn.
+//
+// Cách chạy trên mongos:
 //   docker cp 05-sharding.js mongo-router:/tmp/
 //   docker exec -it mongo-router mongosh -u admin -p admin123 \
 //     --authenticationDatabase admin --quiet /tmp/05-sharding.js
-//
-// Cần chạy 05-sharding-seed.js trước nếu muốn có dữ liệu để so sánh.
 // ============================================================
 
 const appDb = db.getSiblingDB("ecommerce_db");
@@ -67,17 +72,17 @@ if (sampleUser) {
   summarize("find({ user_id }) -> kỳ vọng SINGLE_SHARD",
     appDb.orders.find({ user_id: sampleUser._id }));
 } else {
-  print("Chưa có dữ liệu users - hãy chạy 05-sharding-seed.js trước.");
+  print("Chưa có dữ liệu users - hãy chạy 05-sharding-seed.js trước rồi chạy lại file này.");
 }
 
 print("\n========== BƯỚC 6: Scatter-gather (không có shard key) ==========\n");
-summarize("find({ status: 'paid' }) khi chưa có index status -> SHARD_MERGE + COLLSCAN",
-  appDb.orders.find({ status: "paid" }));
+summarize("find({ status: 'completed' }) -> SHARD_MERGE, hỏi cả 2 shard",
+  appDb.orders.find({ status: "completed" }));
 
 print("\n========== BƯỚC 7: Index hỗ trợ scatter-gather ==========\n");
 print("Tạo index: " + appDb.orders.createIndex({ status: 1 }));
-summarize("find({ status: 'paid' }) sau khi có index -> vẫn SHARD_MERGE nhưng IXSCAN",
-  appDb.orders.find({ status: "paid" }));
+summarize("find({ status: 'completed' }) sau khi có index -> vẫn SHARD_MERGE nhưng mỗi shard dùng IXSCAN",
+  appDb.orders.find({ status: "completed" }));
 
 print("\n=> Nhận xét: index giúp mỗi shard bớt quét document, nhưng truy vấn không");
 print("   chứa shard key vẫn phải hỏi tất cả shard. Chọn shard key theo truy vấn phổ biến.");

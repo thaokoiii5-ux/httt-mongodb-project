@@ -1,3 +1,5 @@
+name: docker
+
 services:
   mongo1:
     image: mongo:7.0

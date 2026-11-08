@@ -2,13 +2,22 @@
 // 05-sharding-seed.js
 // Tuần 5: Sharding - seed dữ liệu lớn để quan sát phân phối chunk
 //
-// Chạy trên mongos (port 27020 ở host, container mongo-router):
+// Dùng ĐÚNG schema của ecommerce_db (users: name/email/created_at;
+// orders: user_id/items/total/status/created_at) để các truy vấn khác chạy được trên dữ liệu này.
+//
+// Chạy trên mongos (container mongo-router):
 //   docker cp 05-sharding-seed.js mongo-router:/tmp/
 //   docker exec -it mongo-router mongosh -u admin -p admin123 \
-//     --authenticationDatabase admin /tmp/05-sharding-seed.js
+//     --authenticationDatabase admin --quiet /tmp/05-sharding-seed.js
 //
-// Script có thể chạy lại nhiều lần (xóa dữ liệu cũ trước khi chèn).
+// Script xóa dữ liệu cũ, rồi (khi orders đang trống) shard collection bằng hashed user_id
+// để MongoDB tự pre-split chunk, rồi mới chèn dữ liệu. Chạy lại nhiều lần không bị trùng.
 // ============================================================
+
+if (db.hello().msg !== "isdbgrid") {
+  print("Script này chạy trên mongos (mongo-router), không phải node thường. Dừng.");
+  quit(1);
+}
 
 const appDb = db.getSiblingDB("ecommerce_db");
 
@@ -19,6 +28,12 @@ const BATCH_SIZE = 1000;
 print("\n--- Xóa dữ liệu cũ ---");
 appDb.users.deleteMany({});
 appDb.orders.deleteMany({});
+
+print("--- Đảm bảo orders đã shard (hashed user_id), khi collection còn trống ---");
+// Collection trống: MongoDB tự tạo index hashed và pre-split. Nếu orders đã có dữ liệu mà
+// chưa shard thì phải tạo index { user_id: "hashed" } trước (xem tài liệu sh.shardCollection).
+sh.enableSharding("ecommerce_db");
+printjson(sh.shardCollection("ecommerce_db.orders", { user_id: "hashed" }));
 
 print("--- Tạo " + USER_COUNT + " users ---");
 const userIds = [];
@@ -33,7 +48,7 @@ appDb.users.insertMany(
 );
 
 print("--- Tạo " + ORDER_BATCHES * BATCH_SIZE + " orders (lô " + BATCH_SIZE + ") ---");
-const statuses = ["pending", "paid", "shipped", "delivered", "cancelled"];
+const statuses = ["pending", "completed", "cancelled"];
 for (let b = 0; b < ORDER_BATCHES; b++) {
   const batch = [];
   for (let i = 0; i < BATCH_SIZE; i++) {
@@ -41,14 +56,15 @@ for (let b = 0; b < ORDER_BATCHES; b++) {
     const price = 100000 * (1 + Math.floor(Math.random() * 50));
     batch.push({
       user_id: userIds[Math.floor(Math.random() * userIds.length)],
-      order_date: new Date(Date.now() - Math.floor(Math.random() * 180) * 86400000),
-      status: statuses[Math.floor(Math.random() * statuses.length)],
       items: [{
+        product_id: new ObjectId(),
         name: "Sản phẩm " + Math.floor(Math.random() * 100),
         price: price,
         quantity: quantity
       }],
-      total_amount: price * quantity
+      total: price * quantity,
+      status: statuses[Math.floor(Math.random() * statuses.length)],
+      created_at: new Date(Date.now() - Math.floor(Math.random() * 180) * 86400000)
     });
   }
   appDb.orders.insertMany(batch);

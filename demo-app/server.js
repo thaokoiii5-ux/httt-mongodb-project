@@ -7,6 +7,9 @@
 //  - Đơn hàng đọc/ghi trên Primary; tạo đơn dùng transaction (trừ kho và ghi đơn
 //    cùng thành công hoặc cùng thất bại).
 //  - Kết nối bằng app_user (quyền readWrite trên ecommerce_db), không dùng admin.
+//  - Khi khởi động, tự đảm bảo các index cần cho truy vấn (không phụ thuộc đã chạy 04-indexing.js).
+//
+// Giới hạn của bản demo: API không có xác thực (ví dụ /users/:userId/orders ai gọi cũng được).
 
 const express = require('express');
 const { MongoClient, ObjectId } = require('mongodb');
@@ -62,7 +65,7 @@ app.get('/health', wrap(async (req, res) => {
   });
 }));
 
-// Danh sách / tìm kiếm sản phẩm (text index tuần 3: tìm theo từ hoàn chỉnh)
+// Danh sách / tìm kiếm sản phẩm (text index: tìm theo từ hoàn chỉnh)
 app.get('/products', wrap(async (req, res) => {
   const filter = req.query.q ? { $text: { $search: String(req.query.q) } } : {};
   const docs = await db.collection('products')
@@ -157,9 +160,23 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
   res.status(500).json({ error: 'Lỗi máy chủ' });
 });
 
+// Tạo các index mà truy vấn của API cần (createIndex không làm gì nếu index đã tồn tại).
+// Nhờ đó /products?q=... không lỗi dù chưa chạy 04-indexing.js hoặc đã seed lại dữ liệu.
+async function ensureIndexes() {
+  try {
+    await db.collection('products').createIndex({ category_id: 1 });
+    await db.collection('products').createIndex({ name: 'text' });
+    await db.collection('orders').createIndex({ user_id: 1, created_at: -1 });
+    console.log('Đã đảm bảo các index cần thiết');
+  } catch (err) {
+    console.warn('Không tạo được index (bỏ qua, API vẫn chạy):', err.message);
+  }
+}
+
 async function main() {
   await client.connect();
   db = client.db(); // tên database lấy từ MONGO_URI (ecommerce_db)
+  await ensureIndexes();
   const server = app.listen(PORT, () => console.log(`API đang chạy ở cổng ${PORT}`));
   const shutdown = async () => {
     server.close();
